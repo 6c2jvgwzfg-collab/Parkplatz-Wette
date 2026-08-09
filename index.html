@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#2563eb" />
+<title>Parkplatzwette</title>
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" href="icon.svg" type="image/svg+xml" />
+<link rel="apple-touch-icon" href="icon.svg" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<main>
+  <header class="app-header">
+    <h1>🅿️🎲 Parkplatzwette</h1>
+    <p>Kein Parkschein, dafür Nerven wie Drahtseile.</p>
+  </header>
+
+  <section id="summary">
+    <h2>Bilanz</h2>
+    <div class="summary-grid">
+      <div class="stat stat--saved">
+        <div class="stat-label">Gespart</div>
+        <div class="stat-value" id="stat-saved">0,00 €</div>
+      </div>
+      <div class="stat stat--fines">
+        <div class="stat-label">Bußgelder</div>
+        <div class="stat-value" id="stat-fines">0,00 €</div>
+      </div>
+      <div class="stat stat--bilanz" id="stat-bilanz-card">
+        <div class="stat-label">Nettobilanz</div>
+        <div class="stat-value" id="stat-bilanz">0,00 €</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Erfolgsquote</div>
+        <div class="stat-value" id="stat-quote">–</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="neue-wette">
+    <h2>Neue Wette</h2>
+    <div class="card">
+      <form id="form-neue-wette">
+        <div class="field">
+          <label for="input-datum">Datum</label>
+          <input type="date" id="input-datum" required />
+        </div>
+        <div class="field">
+          <label for="input-einsatz">Voraussichtlicher EasyPark-Preis (€)</label>
+          <input type="number" id="input-einsatz" inputmode="decimal" step="0.01" min="0" placeholder="z. B. 3,50" required />
+        </div>
+        <button type="submit" class="btn-primary">Wette starten</button>
+      </form>
+    </div>
+  </section>
+
+  <section id="offene-wetten">
+    <h2>Offene Wetten</h2>
+    <div class="entry-list" id="list-offen">
+      <div class="empty-hint">Keine offenen Wetten. Parkst du gerade schwarz? 😉</div>
+    </div>
+  </section>
+
+  <section id="verlauf">
+    <h2>Verlauf</h2>
+    <div class="entry-list" id="list-verlauf">
+      <div class="empty-hint">Noch keine abgeschlossenen Wetten.</div>
+    </div>
+  </section>
+
+  <section id="backup">
+    <div class="footer-actions">
+      <button id="btn-export">⬇️ Sichern</button>
+      <button id="btn-import">⬆️ Wiederherstellen</button>
+      <input type="file" id="input-import" accept="application/json" hidden />
+    </div>
+    <p class="footer-note">
+      Alle Daten bleiben ausschließlich lokal auf diesem Gerät/Browser gespeichert
+      (kein Server, keine Übertragung). Nutze „Sichern“, um regelmäßig eine
+      Backup-Datei zu speichern.
+    </p>
+  </section>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
