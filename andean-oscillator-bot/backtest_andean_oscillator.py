@@ -10,6 +10,31 @@ und simuliert die Trades mit festem Stop-Loss (1%) und Take-Profit (1.5%).
 Am Ende wird eine Statistik ausgegeben (Anzahl Trades, Win-Rate,
 Gesamtgewinn/-verlust) und alle Einzeltrades werden zusaetzlich in
 "backtest_trades.csv" gespeichert.
+
+--------------------------------------------------------------------
+SICHERHEITSHINWEISE FUER DEN SPAETEREN LIVE-/PAPER-TRADING-BOT
+--------------------------------------------------------------------
+Dieses Skript ist NUR ein Backtest (keine echten Orders, keine API-Keys
+noetig). Sobald daraus ein Bot wird, der wirklich Orders an eine Boerse
+schickt, MUESSEN zusaetzlich folgende Punkte umgesetzt werden:
+
+1) API-Schluessel-Absicherung (Einstellung auf der Boersen-Webseite,
+   NICHT im Code): Beim Erstellen des API-Keys nur "Read" und "Trade"
+   aktivieren, "Withdraw" (Auszahlung) IMMER deaktiviert lassen.
+   Zusaetzlich IP-Whitelisting auf die feste IP-Adresse des Servers
+   einschraenken, auf dem der Bot laeuft.
+
+2) Risikomanagement im Code: fester Stop-Loss/Take-Profit (siehe unten)
+   UND striktes, risikobasiertes Position Sizing (siehe RISIKO_PRO_TRADE_PCT).
+
+3) Technische Absicherung: Circuit Breaker bei mehreren Verlusten in
+   Folge (siehe MAX_VERLUSTE_IN_FOLGE) sowie - im Live-Betrieb - eine
+   Ueberwachung der Boersenverbindung, die den Bot bei Verbindungsabbruch
+   sofort stoppt und offene Positionen schliesst.
+
+Punkte 2 und 3 sind unten bereits in die Backtest-Logik eingebaut, damit
+du ihre Wirkung schon jetzt siehst. Punkt 1 betrifft die Kontoeinstellungen
+bei der Boerse und kommt erst in der Live-/Paper-Trading-Version dran.
 """
 
 import ccxt
@@ -34,7 +59,8 @@ TAKE_PROFIT_PCT = 0.015          # 1.5% Take-Profit vom Einstiegskurs (CRV 1:1.5
 GEBUEHR_PCT = 0.001               # 0.1% Handelsgebuehr pro Order (Kauf und Verkauf je einmal)
 
 STARTKAPITAL = 1000.0             # nur zur Veranschaulichung der Kapitalkurve
-POSITIONSGROESSE_PCT = 1.0        # Anteil des Kapitals, der pro Trade eingesetzt wird (1.0 = 100%)
+RISIKO_PRO_TRADE_PCT = 0.01       # Risikomanagement: max. 1% des Kapitals darf pro Trade verloren gehen
+MAX_VERLUSTE_IN_FOLGE = 3         # Circuit Breaker: Bot stoppt nach so vielen Verlusten in Folge
 
 
 # ============================================================
@@ -184,7 +210,8 @@ def erzeuge_signale(df, adx_schwelle):
 # ============================================================
 # 5. BACKTEST-SIMULATION
 # ============================================================
-def backtest_durchfuehren(df, sl_pct, tp_pct, gebuehr_pct, startkapital, positionsgroesse_pct):
+def backtest_durchfuehren(df, sl_pct, tp_pct, gebuehr_pct, startkapital,
+                           risiko_pro_trade_pct, max_verluste_in_folge):
     """
     Simuliert die Trades chronologisch, Kerze fuer Kerze.
     Es ist immer nur eine Position gleichzeitig offen. Ein Stop-Loss
@@ -196,6 +223,14 @@ def backtest_durchfuehren(df, sl_pct, tp_pct, gebuehr_pct, startkapital, positio
     In der Realitaet wuerde der Einstieg erst auf der naechsten Kerze
     moeglich sein - das Ergebnis ist also eine leicht optimistische
     Naeherung.
+
+    Risikomanagement:
+    - Position Sizing: Die Positionsgroesse wird so berechnet, dass beim
+      Treffen des Stop-Loss maximal "risiko_pro_trade_pct" des aktuellen
+      Kapitals verloren geht (z.B. 1%), unabhaengig vom SL-Abstand in %.
+    - Circuit Breaker: Nach "max_verluste_in_folge" Verlusten in Folge
+      wird die Strategie fuer den Rest des Backtest-Zeitraums gestoppt,
+      es werden keine neuen Trades mehr eroeffnet.
     """
     kapital = startkapital
     trades = []
@@ -206,6 +241,11 @@ def backtest_durchfuehren(df, sl_pct, tp_pct, gebuehr_pct, startkapital, positio
     einstiegszeit = None
     stop_loss = None
     take_profit = None
+    einsatz = None
+
+    verluste_in_folge = 0
+    circuit_breaker_aktiv = False
+    circuit_breaker_zeitpunkt = None
 
     for zeile in df.itertuples():
         if in_position:
@@ -234,9 +274,13 @@ def backtest_durchfuehren(df, sl_pct, tp_pct, gebuehr_pct, startkapital, positio
 
                 rendite_pct -= 2 * gebuehr_pct  # Gebuehr fuer Einstieg und Ausstieg
 
-                einsatz = kapital * positionsgroesse_pct
                 gewinn_verlust = einsatz * rendite_pct
                 kapital += gewinn_verlust
+
+                if ergebnis == "Verlust":
+                    verluste_in_folge += 1
+                else:
+                    verluste_in_folge = 0
 
                 trades.append({
                     "einstiegszeit": einstiegszeit,
@@ -244,38 +288,58 @@ def backtest_durchfuehren(df, sl_pct, tp_pct, gebuehr_pct, startkapital, positio
                     "richtung": richtung,
                     "einstiegspreis": einstiegspreis,
                     "ausstiegspreis": ausstiegspreis,
+                    "einsatz": einsatz,
                     "rendite_pct": rendite_pct * 100,
                     "gewinn_verlust": gewinn_verlust,
                     "kapital_danach": kapital,
                     "ergebnis": ergebnis,
+                    "verluste_in_folge_danach": verluste_in_folge,
                 })
 
                 in_position = False
                 richtung = None
 
+                if verluste_in_folge >= max_verluste_in_folge:
+                    circuit_breaker_aktiv = True
+                    circuit_breaker_zeitpunkt = zeile.timestamp
+                    break
+
         if not in_position:
-            if zeile.long_einstieg:
-                richtung = "long"
-                einstiegspreis = zeile.close
-                stop_loss = einstiegspreis * (1 - sl_pct)
-                take_profit = einstiegspreis * (1 + tp_pct)
-                einstiegszeit = zeile.timestamp
-                in_position = True
-            elif zeile.short_einstieg:
-                richtung = "short"
-                einstiegspreis = zeile.close
-                stop_loss = einstiegspreis * (1 + sl_pct)
-                take_profit = einstiegspreis * (1 - tp_pct)
+            if zeile.long_einstieg or zeile.short_einstieg:
+                # Risikobasiertes Position Sizing: Einsatz so waehlen,
+                # dass ein Stop-Loss-Treffer (SL-Abstand plus Gebuehren
+                # fuer Ein- und Ausstieg) genau risiko_pro_trade_pct des
+                # aktuellen Kapitals kostet.
+                risiko_betrag = kapital * risiko_pro_trade_pct
+                verlust_pct_bei_sl = sl_pct + 2 * gebuehr_pct
+                einsatz = risiko_betrag / verlust_pct_bei_sl
+                einsatz = min(einsatz, kapital)  # nie mehr einsetzen als vorhanden ist
+
+                if zeile.long_einstieg:
+                    richtung = "long"
+                    einstiegspreis = zeile.close
+                    stop_loss = einstiegspreis * (1 - sl_pct)
+                    take_profit = einstiegspreis * (1 + tp_pct)
+                else:
+                    richtung = "short"
+                    einstiegspreis = zeile.close
+                    stop_loss = einstiegspreis * (1 + sl_pct)
+                    take_profit = einstiegspreis * (1 - tp_pct)
+
                 einstiegszeit = zeile.timestamp
                 in_position = True
 
-    return pd.DataFrame(trades), kapital
+    if circuit_breaker_aktiv:
+        print(f"\n[CIRCUIT BREAKER] Nach {max_verluste_in_folge} Verlusten in Folge "
+              f"wurde der Handel am {circuit_breaker_zeitpunkt} gestoppt.")
+
+    return pd.DataFrame(trades), kapital, circuit_breaker_aktiv
 
 
 # ============================================================
 # 6. STATISTIK AUSGEBEN
 # ============================================================
-def zeige_statistik(trades_df, startkapital, endkapital):
+def zeige_statistik(trades_df, startkapital, endkapital, circuit_breaker_aktiv):
     print("\n" + "=" * 55)
     print("BACKTEST-ERGEBNIS: Andean Oscillator Scalping Strategie")
     print("=" * 55)
@@ -310,6 +374,8 @@ def zeige_statistik(trades_df, startkapital, endkapital):
     print(f"Gesamtgewinn/-verlust:       {gesamt_gewinn_verlust:.2f} USDT ({gesamt_rendite_pct:.2f} %)")
     print(f"Durchschnittlicher Gewinn:   {durchschnitt_gewinn:.2f} USDT")
     print(f"Durchschnittlicher Verlust:  {durchschnitt_verlust:.2f} USDT")
+    if circuit_breaker_aktiv:
+        print("Hinweis:                     Circuit Breaker hat den Handel vorzeitig gestoppt!")
     print("=" * 55)
 
     dateiname = "backtest_trades.csv"
@@ -333,11 +399,12 @@ def main():
 
     df = erzeuge_signale(df, ADX_SCHWELLE)
 
-    trades_df, endkapital = backtest_durchfuehren(
-        df, STOP_LOSS_PCT, TAKE_PROFIT_PCT, GEBUEHR_PCT, STARTKAPITAL, POSITIONSGROESSE_PCT
+    trades_df, endkapital, circuit_breaker_aktiv = backtest_durchfuehren(
+        df, STOP_LOSS_PCT, TAKE_PROFIT_PCT, GEBUEHR_PCT, STARTKAPITAL,
+        RISIKO_PRO_TRADE_PCT, MAX_VERLUSTE_IN_FOLGE
     )
 
-    zeige_statistik(trades_df, STARTKAPITAL, endkapital)
+    zeige_statistik(trades_df, STARTKAPITAL, endkapital, circuit_breaker_aktiv)
 
 
 if __name__ == "__main__":
