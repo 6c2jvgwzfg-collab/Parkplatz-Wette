@@ -10,6 +10,8 @@
   --color-success-bg: #e8f7ee;
   --color-danger: #b91c1c;
   --color-danger-bg: #fdeaea;
+  --color-warning: #b45309;
+  --color-warning-bg: #fef3e2;
   --radius: 14px;
   --shadow: 0 1px 3px rgba(20, 20, 30, 0.08);
 }
@@ -27,6 +29,8 @@
     --color-success-bg: #133020;
     --color-danger: #f87171;
     --color-danger-bg: #3a1414;
+    --color-warning: #fbbf24;
+    --color-warning-bg: #3a2c0f;
     --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
   }
 }
@@ -109,6 +113,8 @@ h2 {
 .stat--bilanz.negative .stat-value { color: var(--color-danger); }
 .stat--saved .stat-value { color: var(--color-success); }
 .stat--fines .stat-value { color: var(--color-danger); }
+.stat--eingezahlt .stat-value { color: var(--color-success); }
+.stat--ausstehend .stat-value { color: var(--color-warning); }
 
 .card {
   background: var(--color-surface);
@@ -205,6 +211,25 @@ button {
 
 .entry-result.positive { color: var(--color-success); }
 .entry-result.negative { color: var(--color-danger); }
+
+.btn-deposit {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-align: center;
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+  border: 1px solid transparent;
+}
+
+.btn-deposit.is-deposited {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+}
 
 .entry-actions {
   display: flex;

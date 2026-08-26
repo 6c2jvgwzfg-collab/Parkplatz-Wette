@@ -23,7 +23,12 @@ bleiben ausschließlich auf deinem Gerät.
 3. **Bilanz im Blick**: Oben siehst du jederzeit die Summe der gesparten
    Beträge, die Summe der Bußgelder, die daraus resultierende Nettobilanz
    sowie deine Erfolgsquote.
-4. Einträge im Verlauf lassen sich per ↺ wieder öffnen (z. B. bei
+4. **Einzahlung tracken**: Bei jeder gewonnenen Wette erscheint im Verlauf
+   ein Button „○ Noch nicht eingezahlt“. Sobald du das gesparte Geld
+   tatsächlich auf dein Sparkonto o. Ä. überwiesen hast, tippe darauf –
+   er wechselt zu „💰 Eingezahlt“. Oben zeigen „Bereits eingezahlt“ und
+   „Noch einzuzahlen“ den Stand.
+5. Einträge im Verlauf lassen sich per ↺ wieder öffnen (z. B. bei
    Fehleingaben) oder per 🗑 löschen.
 
 ## Nutzung auf dem Handy
