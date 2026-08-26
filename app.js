@@ -59,6 +59,15 @@
     if (!entry) return;
     entry.status = "gewonnen";
     entry.bussgeld = null;
+    entry.eingezahlt = false;
+    saveEntries(entries);
+    render();
+  }
+
+  function toggleEingezahlt(id) {
+    var entry = entries.find(function (e) { return e.id === id; });
+    if (!entry) return;
+    entry.eingezahlt = !entry.eingezahlt;
     saveEntries(entries);
     render();
   }
@@ -77,6 +86,7 @@
     if (!entry) return;
     entry.status = "offen";
     entry.bussgeld = null;
+    entry.eingezahlt = false;
     saveEntries(entries);
     render();
   }
@@ -91,12 +101,19 @@
   function computeSummary() {
     var gespart = 0;
     var bussgelder = 0;
+    var eingezahlt = 0;
+    var ausstehend = 0;
     var gewonnenCount = 0;
     var verlorenCount = 0;
     entries.forEach(function (e) {
       if (e.status === "gewonnen") {
         gespart += e.einsatz;
         gewonnenCount++;
+        if (e.eingezahlt) {
+          eingezahlt += e.einsatz;
+        } else {
+          ausstehend += e.einsatz;
+        }
       } else if (e.status === "verloren") {
         bussgelder += e.bussgeld || 0;
         verlorenCount++;
@@ -109,7 +126,9 @@
       bussgelder: bussgelder,
       bilanz: gespart - bussgelder,
       quote: quote,
-      resolvedCount: resolvedCount
+      resolvedCount: resolvedCount,
+      eingezahlt: eingezahlt,
+      ausstehend: ausstehend
     };
   }
 
@@ -119,6 +138,8 @@
     document.getElementById("stat-fines").textContent = formatCurrency(s.bussgelder);
     document.getElementById("stat-bilanz").textContent = formatCurrency(s.bilanz);
     document.getElementById("stat-quote").textContent = s.quote === null ? "–" : s.quote + " %";
+    document.getElementById("stat-eingezahlt").textContent = formatCurrency(s.eingezahlt);
+    document.getElementById("stat-ausstehend").textContent = formatCurrency(s.ausstehend);
 
     var bilanzCard = document.getElementById("stat-bilanz-card");
     bilanzCard.classList.remove("positive", "negative");
@@ -183,6 +204,11 @@
       var amountsText = won
         ? "Einsatz: " + formatCurrency(e.einsatz)
         : "Einsatz: " + formatCurrency(e.einsatz) + " · Bußgeld: " + formatCurrency(e.bussgeld || 0);
+      var eingezahltButton = won
+        ? '<button class="btn-deposit ' + (e.eingezahlt ? "is-deposited" : "") + '" data-action="toggle-eingezahlt" data-id="' + e.id + '">' +
+            (e.eingezahlt ? "💰 Eingezahlt" : "○ Noch nicht eingezahlt") +
+          '</button>'
+        : "";
 
       return (
         '<div class="entry ' + (won ? "entry--won" : "entry--lost") + '" data-id="' + e.id + '">' +
@@ -191,6 +217,7 @@
             '<span class="entry-result ' + resultClass + '">' + resultText + '</span>' +
           '</div>' +
           '<div class="entry-amounts">' + amountsText + '</div>' +
+          eingezahltButton +
           '<div class="entry-actions">' +
             '<button class="btn-ghost" data-action="reopen" data-id="' + e.id + '">↺</button>' +
             '<button class="btn-ghost" data-action="delete" data-id="' + e.id + '">🗑</button>' +
@@ -229,6 +256,8 @@
         return;
       }
       resolveLost(id, value);
+    } else if (action === "toggle-eingezahlt") {
+      toggleEingezahlt(id);
     } else if (action === "reopen") {
       reopenEntry(id);
     } else if (action === "delete") {
