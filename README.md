@@ -31,6 +31,26 @@ bleiben ausschließlich auf deinem Gerät.
 5. Einträge im Verlauf lassen sich per ↺ wieder öffnen (z. B. bei
    Fehleingaben) oder per 🗑 löschen.
 
+## Preisrechner (Zonen & EasyPark-Gebühr)
+
+Kein Live-Zugriff auf EasyPark, aber ein eigenes Gedächtnis für deine
+üblichen Parkorte, damit du EasyPark nicht mehr extra öffnen musst:
+
+1. Unter „⚙️ Zonen & EasyPark-Gebühr“ einmalig deine EasyPark-Gebühr
+   hinterlegen (Fixbetrag und/oder Prozentsatz – je nachdem, was
+   EasyPark bei dir berechnet) sowie deine üblichen Parkzonen mit Preis
+   pro Stunde anlegen. Beim Anlegen kann der aktuelle Standort mit
+   gespeichert werden.
+2. Beim Start einer neuen Wette auf „🧮 Preis berechnen“ tippen, dann
+   „📍 Standort nutzen“ – die App schlägt anhand deines Standorts die
+   nächstgelegene gespeicherte Zone vor. Parkdauer eintragen, der Preis
+   (Zonentarif + EasyPark-Gebühr) wird live berechnet.
+3. „In Einsatz übernehmen“ füllt das Preisfeld automatisch aus – weiterhin
+   manuell überschreibbar, falls der Ort neu/unbekannt ist.
+
+Das deckt alle Orte ab, an denen du regelmäßig parkst. An komplett neuen
+Orten trägst du den EasyPark-Preis weiterhin manuell ein.
+
 ## Nutzung auf dem Handy
 
 Die App ist eine installierbare Progressive Web App (PWA):

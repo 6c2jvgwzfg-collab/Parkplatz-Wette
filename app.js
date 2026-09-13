@@ -2,10 +2,18 @@
   "use strict";
 
   var STORAGE_KEY = "parkplatzwette_entries_v1";
+  var ZONES_KEY = "parkplatzwette_zonen_v1";
+  var SETTINGS_KEY = "parkplatzwette_settings_v1";
   var currencyFmt = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" });
 
   function formatCurrency(value) {
     return currencyFmt.format(value);
+  }
+
+  function escapeHtml(str) {
+    return String(str).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
   }
 
   function formatDate(isoDate) {
@@ -39,7 +47,41 @@
     return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   }
 
+  function loadZones() {
+    try {
+      var raw = localStorage.getItem(ZONES_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch (e) {
+      console.error("Konnte Zonen nicht laden", e);
+      return [];
+    }
+  }
+
+  function saveZones(zones) {
+    localStorage.setItem(ZONES_KEY, JSON.stringify(zones));
+  }
+
+  function loadSettings() {
+    try {
+      var raw = localStorage.getItem(SETTINGS_KEY);
+      var parsed = raw ? JSON.parse(raw) : {};
+      return {
+        gebuehrFix: typeof parsed.gebuehrFix === "number" ? parsed.gebuehrFix : 0,
+        gebuehrProzent: typeof parsed.gebuehrProzent === "number" ? parsed.gebuehrProzent : 0
+      };
+    } catch (e) {
+      console.error("Konnte Einstellungen nicht laden", e);
+      return { gebuehrFix: 0, gebuehrProzent: 0 };
+    }
+  }
+
+  function saveSettings(settings) {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  }
+
   var entries = loadEntries();
+  var zones = loadZones();
+  var settings = loadSettings();
 
   function addEntry(datum, einsatz) {
     entries.push({
@@ -96,6 +138,78 @@
     entries = entries.filter(function (e) { return e.id !== id; });
     saveEntries(entries);
     render();
+  }
+
+  function addZone(name, preis, withLocation) {
+    var zone = { id: makeId(), name: name, preis: preis, lat: null, lng: null };
+    zones.push(zone);
+    saveZones(zones);
+    renderZones();
+    renderZoneSelect();
+    if (withLocation) captureZoneLocation(zone.id);
+  }
+
+  function deleteZone(id) {
+    if (!confirm("Diese Zone wirklich löschen?")) return;
+    zones = zones.filter(function (z) { return z.id !== id; });
+    saveZones(zones);
+    renderZones();
+    renderZoneSelect();
+  }
+
+  function captureZoneLocation(id) {
+    if (!("geolocation" in navigator)) {
+      alert("Standortzugriff wird von diesem Browser nicht unterstützt.");
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      function (pos) {
+        var zone = zones.find(function (z) { return z.id === id; });
+        if (!zone) return;
+        zone.lat = pos.coords.latitude;
+        zone.lng = pos.coords.longitude;
+        saveZones(zones);
+        renderZones();
+      },
+      function (err) {
+        alert("Standort konnte nicht ermittelt werden: " + err.message);
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  }
+
+  function haversineMeters(lat1, lng1, lat2, lng2) {
+    var R = 6371000;
+    var toRad = function (d) { return (d * Math.PI) / 180; };
+    var dLat = toRad(lat2 - lat1);
+    var dLng = toRad(lng2 - lng1);
+    var a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+    var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  }
+
+  function findNearestZone(lat, lng) {
+    var withCoords = zones.filter(function (z) { return typeof z.lat === "number" && typeof z.lng === "number"; });
+    if (withCoords.length === 0) return null;
+    var nearest = null;
+    var minDist = Infinity;
+    withCoords.forEach(function (z) {
+      var d = haversineMeters(lat, lng, z.lat, z.lng);
+      if (d < minDist) {
+        minDist = d;
+        nearest = z;
+      }
+    });
+    return { zone: nearest, distance: minDist };
+  }
+
+  function computePrice(zone, minutes) {
+    var stunden = minutes / 60;
+    var tarif = zone.preis * stunden;
+    var gebuehr = settings.gebuehrFix + tarif * (settings.gebuehrProzent / 100);
+    return tarif + gebuehr;
   }
 
   function computeSummary() {
@@ -227,10 +341,64 @@
     }).join("");
   }
 
+  function renderZones() {
+    var container = document.getElementById("zone-list");
+    if (!container) return;
+    if (zones.length === 0) {
+      container.innerHTML = '<div class="empty-hint">Noch keine Zonen gespeichert.</div>';
+      return;
+    }
+    container.innerHTML = zones.map(function (z) {
+      var hasLocation = typeof z.lat === "number" && typeof z.lng === "number";
+      return (
+        '<div class="zone-item" data-id="' + z.id + '">' +
+          '<div class="zone-info">' +
+            '<span class="zone-name">' + escapeHtml(z.name) + '</span>' +
+            '<span class="zone-price">' + formatCurrency(z.preis) + '/Std' + (hasLocation ? ' · 📍' : '') + '</span>' +
+          '</div>' +
+          '<button type="button" class="btn-ghost" data-action="delete-zone" data-id="' + z.id + '">🗑</button>' +
+        '</div>'
+      );
+    }).join("");
+  }
+
+  function renderZoneSelect() {
+    var select = document.getElementById("select-zone");
+    if (!select) return;
+    var current = select.value;
+    if (zones.length === 0) {
+      select.innerHTML = '<option value="">Keine Zonen gespeichert</option>';
+      select.disabled = true;
+    } else {
+      select.disabled = false;
+      select.innerHTML = zones.map(function (z) {
+        return '<option value="' + z.id + '">' + escapeHtml(z.name) + ' (' + formatCurrency(z.preis) + '/Std)</option>';
+      }).join("");
+      if (zones.some(function (z) { return z.id === current; })) select.value = current;
+    }
+    updateCalcResult();
+  }
+
+  function updateCalcResult() {
+    var select = document.getElementById("select-zone");
+    var dauerInput = document.getElementById("input-dauer");
+    var resultEl = document.getElementById("calc-result");
+    if (!select || !dauerInput || !resultEl) return;
+    var zone = zones.find(function (z) { return z.id === select.value; });
+    var minutes = parseFloat(dauerInput.value);
+    if (!zone || isNaN(minutes) || minutes <= 0) {
+      resultEl.textContent = "—";
+      return;
+    }
+    resultEl.textContent = formatCurrency(computePrice(zone, minutes));
+  }
+
   function render() {
     renderSummary();
     renderOffen();
     renderVerlauf();
+    renderZones();
+    renderZoneSelect();
   }
 
   function handleListClick(evt) {
@@ -263,6 +431,95 @@
     } else if (action === "delete") {
       deleteEntry(id);
     }
+  }
+
+  function handleZoneListClick(evt) {
+    var btn = evt.target.closest("button[data-action]");
+    if (!btn) return;
+    var action = btn.getAttribute("data-action");
+    var id = btn.getAttribute("data-id");
+    if (action === "delete-zone") {
+      deleteZone(id);
+    }
+  }
+
+  function handleZoneFormSubmit(evt) {
+    evt.preventDefault();
+    var nameInput = document.getElementById("input-zone-name");
+    var preisInput = document.getElementById("input-zone-preis");
+    var standortCheckbox = document.getElementById("input-zone-standort");
+    var name = nameInput.value.trim();
+    var preis = parseFloat(preisInput.value.replace(",", "."));
+
+    if (!name || isNaN(preis) || preis < 0) {
+      alert("Bitte einen Namen und einen gültigen Preis pro Stunde eingeben.");
+      return;
+    }
+
+    addZone(name, preis, standortCheckbox.checked);
+    nameInput.value = "";
+    preisInput.value = "";
+  }
+
+  function handleSettingsChange() {
+    var fixInput = document.getElementById("input-gebuehr-fix");
+    var prozentInput = document.getElementById("input-gebuehr-prozent");
+    var fix = parseFloat(fixInput.value.replace(",", "."));
+    var prozent = parseFloat(prozentInput.value.replace(",", "."));
+    settings.gebuehrFix = isNaN(fix) ? 0 : fix;
+    settings.gebuehrProzent = isNaN(prozent) ? 0 : prozent;
+    saveSettings(settings);
+    updateCalcResult();
+  }
+
+  function handleToggleCalc() {
+    var panel = document.getElementById("calc-panel");
+    var btn = document.getElementById("btn-toggle-calc");
+    if (!panel || !btn) return;
+    panel.hidden = !panel.hidden;
+    btn.textContent = panel.hidden ? "🧮 Preis berechnen" : "🧮 Preisrechner ausblenden";
+    if (!panel.hidden) updateCalcResult();
+  }
+
+  function handleUseLocation() {
+    var suggestionEl = document.getElementById("location-suggestion");
+    if (!suggestionEl) return;
+    if (!("geolocation" in navigator)) {
+      suggestionEl.textContent = "Standortzugriff wird von diesem Browser nicht unterstützt.";
+      return;
+    }
+    suggestionEl.textContent = "Standort wird ermittelt …";
+    navigator.geolocation.getCurrentPosition(
+      function (pos) {
+        var match = findNearestZone(pos.coords.latitude, pos.coords.longitude);
+        if (!match) {
+          suggestionEl.textContent = "Keine gespeicherte Zone mit Standort in der Nähe gefunden.";
+          return;
+        }
+        var select = document.getElementById("select-zone");
+        if (select) select.value = match.zone.id;
+        suggestionEl.textContent =
+          "Vorschlag: " + match.zone.name + " (" + Math.round(match.distance) + " m entfernt)";
+        updateCalcResult();
+      },
+      function (err) {
+        suggestionEl.textContent = "Standort konnte nicht ermittelt werden: " + err.message;
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  }
+
+  function handleApplyCalc() {
+    var select = document.getElementById("select-zone");
+    var dauerInput = document.getElementById("input-dauer");
+    var einsatzInput = document.getElementById("input-einsatz");
+    var zone = zones.find(function (z) { return z.id === select.value; });
+    var minutes = parseFloat(dauerInput.value);
+    if (!zone || isNaN(minutes) || minutes <= 0) {
+      alert("Bitte eine Zone und eine gültige Parkdauer wählen.");
+      return;
+    }
+    einsatzInput.value = computePrice(zone, minutes).toFixed(2);
   }
 
   function handleFormSubmit(evt) {
@@ -331,6 +588,18 @@
       document.getElementById("input-import").click();
     });
     document.getElementById("input-import").addEventListener("change", handleImportFile);
+
+    document.getElementById("input-gebuehr-fix").value = settings.gebuehrFix || "";
+    document.getElementById("input-gebuehr-prozent").value = settings.gebuehrProzent || "";
+    document.getElementById("input-gebuehr-fix").addEventListener("change", handleSettingsChange);
+    document.getElementById("input-gebuehr-prozent").addEventListener("change", handleSettingsChange);
+    document.getElementById("zone-list").addEventListener("click", handleZoneListClick);
+    document.getElementById("form-neue-zone").addEventListener("submit", handleZoneFormSubmit);
+    document.getElementById("btn-toggle-calc").addEventListener("click", handleToggleCalc);
+    document.getElementById("btn-use-location").addEventListener("click", handleUseLocation);
+    document.getElementById("btn-apply-calc").addEventListener("click", handleApplyCalc);
+    document.getElementById("select-zone").addEventListener("change", updateCalcResult);
+    document.getElementById("input-dauer").addEventListener("input", updateCalcResult);
 
     render();
 

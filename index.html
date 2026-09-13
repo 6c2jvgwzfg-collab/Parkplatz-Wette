@@ -61,9 +61,69 @@
           <label for="input-einsatz">Voraussichtlicher EasyPark-Preis (€)</label>
           <input type="number" id="input-einsatz" inputmode="decimal" step="0.01" min="0" placeholder="z. B. 3,50" required />
         </div>
+
+        <button type="button" id="btn-toggle-calc" class="btn-link">🧮 Preis berechnen</button>
+        <div id="calc-panel" class="calc-panel" hidden>
+          <div class="field">
+            <label for="select-zone">Zone</label>
+            <select id="select-zone"></select>
+          </div>
+          <button type="button" id="btn-use-location" class="btn-secondary">📍 Standort nutzen</button>
+          <div class="location-suggestion" id="location-suggestion"></div>
+          <div class="field">
+            <label for="input-dauer">Parkdauer (Minuten)</label>
+            <input type="number" id="input-dauer" inputmode="numeric" step="1" min="1" value="60" />
+          </div>
+          <div class="calc-result-row">
+            <span>Berechneter Preis inkl. EasyPark-Gebühr:</span>
+            <span class="calc-result" id="calc-result">—</span>
+          </div>
+          <button type="button" id="btn-apply-calc" class="btn-secondary">In Einsatz übernehmen</button>
+        </div>
+
         <button type="submit" class="btn-primary">Wette starten</button>
       </form>
     </div>
+  </section>
+
+  <section id="einstellungen">
+    <details class="settings-details">
+      <summary>⚙️ Zonen &amp; EasyPark-Gebühr</summary>
+      <div class="card">
+        <h3>EasyPark-Gebühr</h3>
+        <p class="field-hint">Wird bei der Preisberechnung automatisch auf den Zonentarif addiert.</p>
+        <div class="field-row">
+          <div class="field">
+            <label for="input-gebuehr-fix">Fixbetrag (€)</label>
+            <input type="number" id="input-gebuehr-fix" inputmode="decimal" step="0.01" min="0" placeholder="z. B. 0,39" />
+          </div>
+          <div class="field">
+            <label for="input-gebuehr-prozent">Prozentual (%)</label>
+            <input type="number" id="input-gebuehr-prozent" inputmode="decimal" step="0.1" min="0" placeholder="z. B. 5" />
+          </div>
+        </div>
+
+        <h3>Meine Parkzonen</h3>
+        <div class="zone-list" id="zone-list">
+          <div class="empty-hint">Noch keine Zonen gespeichert.</div>
+        </div>
+        <form id="form-neue-zone" class="zone-form">
+          <div class="field">
+            <label for="input-zone-name">Name</label>
+            <input type="text" id="input-zone-name" placeholder="z. B. Altstadt Nord" required />
+          </div>
+          <div class="field">
+            <label for="input-zone-preis">Preis pro Stunde (€)</label>
+            <input type="number" id="input-zone-preis" inputmode="decimal" step="0.01" min="0" placeholder="z. B. 2,00" required />
+          </div>
+          <label class="checkbox-field">
+            <input type="checkbox" id="input-zone-standort" checked />
+            Aktuellen Standort mit speichern (für Vorschläge)
+          </label>
+          <button type="submit" class="btn-secondary">Zone speichern</button>
+        </form>
+      </div>
+    </details>
   </section>
 
   <section id="offene-wetten">
